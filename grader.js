@@ -20,10 +20,12 @@ References:
    - https://developer.mozilla.org/en-US/docs/JSON
    - https://developer.mozilla.org/en-US/docs/JSON#JSON_in_Firefox_2
 */
-
+console.log (process.argv);
+var Result = null;
 var fs = require('fs');
 var program = require('commander');
 var cheerio = require('cheerio');
+var rest = require ('restler');
 var HTMLFILE_DEFAULT = "index.html";
 var CHECKSFILE_DEFAULT = "checks.json";
 
@@ -35,6 +37,7 @@ var assertFileExists = function(infile) {
     }
     return instr;
 };
+
 
 var cheerioHtmlFile = function(htmlfile) {
     return cheerio.load(fs.readFileSync(htmlfile));
@@ -60,15 +63,48 @@ var clone = function(fn) {
     // http://stackoverflow.com/a/6772648
     return fn.bind({});
 };
+var getRestResult = function(URL) {
+    console.log("entered restGetResult");
+    console.log("before GET, the url is " + URL);
+    URL = URL.toString();
+    if (URL.indexOf('http') != 0){
+	var fsURL = URL;
+    	URL = "http://"+URL;
+	}
+    else fsURL = URL.split('//')[1];	 
+    rest.get(URL).on('complete', function (result,response) {
+        console.log("Entered GET oncomplete function\n");
+        if (result instanceof Error) {
+            console.log("%s does not exist.", URL);
+            process.exit(1);
+            }
+        else {
+	     fs.writeFileSync(program.url,result);
+             var checkJson = checkHtmlFile(fsURL, program.checks);console.log("printed in case result came back correct \n");
+             var outJson = JSON.stringify(checkJson, null, 4);
+             console.log(outJson);
+	     fs.unlinkSync(fsURL);
+	}});
+return fsURL;
+};
 
 if(require.main == module) {
     program
         .option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKSFILE_DEFAULT)
         .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists), HTMLFILE_DEFAULT)
+        .option('-u, --url <URL>', 'Website URL', clone(getRestResult))
         .parse(process.argv);
-    var checkJson = checkHtmlFile(program.file, program.checks);
-    var outJson = JSON.stringify(checkJson, null, 4);
-    console.log(outJson);
-} else {
+
+process.argv.forEach(function(input){	
+    if (input === '-f' || input === '--file') {
+	console.log("entered --file: " + program.file);
+        var checkJson = checkHtmlFile(program.file, program.checks);
+        var outJson = JSON.stringify(checkJson, null, 4);
+        console.log(outJson);
+	}
+    else {
     exports.checkHtmlFile = checkHtmlFile;
-}
+    }
+})};
+
+
